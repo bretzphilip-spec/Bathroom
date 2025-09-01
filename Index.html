@@ -1,1510 +1,987 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Clock, User, UserCheck, AlertCircle, Settings, Eye, Users, Download, Volume2, VolumeX, BarChart3, Calendar, TrendingUp, Bell } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bathroom Queue Management System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 50;
+            max-width: 20rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-const BathroomSystem = () => {
-  // Check URL parameters to determine if this is student-only mode
-  const urlParams = new URLSearchParams(window.location.search);
-  const isStudentOnly = urlParams.get('student') === 'true';
-  
-  const [mode, setMode] = useState('student');
-  const [userRole, setUserRole] = useState(isStudentOnly ? 'student-only' : 'student');
-  const [teacherPassword, setTeacherPassword] = useState('');
-  const [students, setStudents] = useState({});
-  const [queues, setQueues] = useState({
-    boys: [],
-    girls: []
-  });
-  const [currentOut, setCurrentOut] = useState({
-    boy: null,
-    girl: null
-  });
-  const [timers, setTimers] = useState({
-    boy: null,
-    girl: null
-  });
-  const [timeTracking, setTimeTracking] = useState({});
-  const [selectedClass, setSelectedClass] = useState('Purple');
-  const [selectedStudent, setSelectedStudent] = useState('');
-  const [newStudentName, setNewStudentName] = useState('');
-  const [newStudentGender, setNewStudentGender] = useState('boy');
-  const [password, setPassword] = useState('');
-  const [showOverride, setShowOverride] = useState(false);
-  const [overrideStudent, setOverrideStudent] = useState(null);
-  
-  // Enhanced features state
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [notifications, setNotifications] = useState([]);
-  const [alertThreshold, setAlertThreshold] = useState(5); // minutes
-  const [warningThreshold, setWarningThreshold] = useState(3); // minutes
-  const [maxDailyUses, setMaxDailyUses] = useState(3);
-  const [autoSave, setAutoSave] = useState(true);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [showFileUpload, setShowFileUpload] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  
-  const audioRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const classes = ['Purple', 'Blue', 'Yellow', 'Green', 'Red', 'Orange'];
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-  // Load data from localStorage on component mount
-  useEffect(() => {
-    try {
-      const savedStudents = localStorage.getItem('bathroomSystem_students');
-      const savedTimeTracking = localStorage.getItem('bathroomSystem_timeTracking');
-      const savedSettings = localStorage.getItem('bathroomSystem_settings');
-      
-      if (savedStudents) {
-        setStudents(JSON.parse(savedStudents));
-      }
-      if (savedTimeTracking) {
-        setTimeTracking(JSON.parse(savedTimeTracking));
-      }
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        setSoundEnabled(settings.soundEnabled ?? true);
-        setAlertThreshold(settings.alertThreshold ?? 5);
-        setWarningThreshold(settings.warningThreshold ?? 3);
-        setMaxDailyUses(settings.maxDailyUses ?? 3);
-        setAutoSave(settings.autoSave ?? true);
-        setDarkMode(settings.darkMode ?? false);
-      }
-    } catch (error) {
-      console.error('Error loading saved data:', error);
-    }
-  }, []);
-
-  // Auto-save data when it changes
-  useEffect(() => {
-    if (autoSave) {
-      try {
-        localStorage.setItem('bathroomSystem_students', JSON.stringify(students));
-        localStorage.setItem('bathroomSystem_timeTracking', JSON.stringify(timeTracking));
-        localStorage.setItem('bathroomSystem_settings', JSON.stringify({
-          soundEnabled,
-          alertThreshold,
-          warningThreshold,
-          maxDailyUses,
-          autoSave,
-          darkMode
-        }));
-      } catch (error) {
-        console.error('Error saving data:', error);
-      }
-    }
-  }, [students, timeTracking, soundEnabled, alertThreshold, warningThreshold, maxDailyUses, autoSave, darkMode]);
-
-  // Timer and alert system
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimers(prev => {
-        const newTimers = { ...prev };
-        let alertTriggered = false;
-        
-        ['boy', 'girl'].forEach(gender => {
-          if (newTimers[gender] && newTimers[gender].startTime) {
-            newTimers[gender].elapsed = Date.now() - newTimers[gender].startTime;
-            const minutes = newTimers[gender].elapsed / (1000 * 60);
+        const BathroomSystem = () => {
+            // Check URL parameters for student-only mode
+            const urlParams = new URLSearchParams(window.location.search);
+            const isStudentOnly = urlParams.get('student') === 'true';
             
-            // Trigger alerts
-            if (minutes >= alertThreshold && !newTimers[gender].alertTriggered) {
-              newTimers[gender].alertTriggered = true;
-              alertTriggered = true;
-              addNotification(`${currentOut[gender]?.student.name} has been out for ${alertThreshold}+ minutes!`, 'error');
-            } else if (minutes >= warningThreshold && !newTimers[gender].warningTriggered) {
-              newTimers[gender].warningTriggered = true;
-              addNotification(`${currentOut[gender]?.student.name} has been out for ${warningThreshold} minutes`, 'warning');
-            }
-          }
-        });
-        
-        if (alertTriggered && soundEnabled) {
-          playAlertSound();
-        }
-        
-        return newTimers;
-      });
-    }, 1000);
+            // Core state
+            const [mode, setMode] = useState('student');
+            const [userRole, setUserRole] = useState(isStudentOnly ? 'student-only' : 'student');
+            const [teacherPassword, setTeacherPassword] = useState('');
+            const [students, setStudents] = useState({});
+            const [queues, setQueues] = useState({ boys: [], girls: [] });
+            const [currentOut, setCurrentOut] = useState({ boy: null, girl: null });
+            const [timers, setTimers] = useState({ boy: null, girl: null });
+            
+            // UI state
+            const [selectedClass, setSelectedClass] = useState('Purple');
+            const [selectedStudent, setSelectedStudent] = useState('');
+            const [newStudentName, setNewStudentName] = useState('');
+            const [newStudentGender, setNewStudentGender] = useState('boy');
+            const [notifications, setNotifications] = useState([]);
+            const [showOverride, setShowOverride] = useState(false);
+            const [overrideStudent, setOverrideStudent] = useState(null);
+            const [password, setPassword] = useState('');
+            
+            // Settings
+            const [alertThreshold, setAlertThreshold] = useState(5);
+            const [warningThreshold, setWarningThreshold] = useState(3);
+            const [maxDailyUses, setMaxDailyUses] = useState(3);
+            const [soundEnabled, setSoundEnabled] = useState(true);
+            const [darkMode, setDarkMode] = useState(false);
+            
+            const classes = ['Purple', 'Blue', 'Yellow', 'Green', 'Red', 'Orange'];
 
-    return () => clearInterval(interval);
-  }, [alertThreshold, warningThreshold, soundEnabled, currentOut]);
+            // Load saved data
+            useEffect(() => {
+                try {
+                    const savedStudents = localStorage.getItem('bathroomSystem_students');
+                    const savedSettings = localStorage.getItem('bathroomSystem_settings');
+                    
+                    if (savedStudents) {
+                        setStudents(JSON.parse(savedStudents));
+                    }
+                    if (savedSettings) {
+                        const settings = JSON.parse(savedSettings);
+                        setAlertThreshold(settings.alertThreshold || 5);
+                        setWarningThreshold(settings.warningThreshold || 3);
+                        setMaxDailyUses(settings.maxDailyUses || 3);
+                        setSoundEnabled(settings.soundEnabled !== false);
+                        setDarkMode(settings.darkMode || false);
+                    }
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                }
+            }, []);
 
-  // Notification system
-  const addNotification = (message, type = 'info') => {
-    const notification = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: new Date()
-    };
-    setNotifications(prev => [notification, ...prev.slice(0, 4)]); // Keep only 5 notifications
-    
-    // Auto-remove after 5 seconds for non-error notifications
-    if (type !== 'error') {
-      setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== notification.id));
-      }, 5000);
-    }
-  };
+            // Save data when changed
+            useEffect(() => {
+                try {
+                    localStorage.setItem('bathroomSystem_students', JSON.stringify(students));
+                    localStorage.setItem('bathroomSystem_settings', JSON.stringify({
+                        alertThreshold, warningThreshold, maxDailyUses, soundEnabled, darkMode
+                    }));
+                } catch (error) {
+                    console.error('Error saving data:', error);
+                }
+            }, [students, alertThreshold, warningThreshold, maxDailyUses, soundEnabled, darkMode]);
 
-  const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+            // Timer system
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setTimers(prev => {
+                        const newTimers = { ...prev };
+                        
+                        ['boy', 'girl'].forEach(gender => {
+                            if (newTimers[gender] && newTimers[gender].startTime) {
+                                newTimers[gender].elapsed = Date.now() - newTimers[gender].startTime;
+                                const minutes = newTimers[gender].elapsed / (1000 * 60);
+                                
+                                if (minutes >= alertThreshold && !newTimers[gender].alertTriggered) {
+                                    newTimers[gender].alertTriggered = true;
+                                    addNotification(`${currentOut[gender]?.student.name} has been out for ${alertThreshold}+ minutes!`, 'error');
+                                    if (soundEnabled) playAlertSound();
+                                } else if (minutes >= warningThreshold && !newTimers[gender].warningTriggered) {
+                                    newTimers[gender].warningTriggered = true;
+                                    addNotification(`${currentOut[gender]?.student.name} has been out for ${warningThreshold} minutes`, 'warning');
+                                }
+                            }
+                        });
+                        
+                        return newTimers;
+                    });
+                }, 1000);
 
-  const playAlertSound = () => {
-    if (audioRef.current && soundEnabled) {
-      // Create a simple beep sound using Web Audio API
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
-    }
-  };
+                return () => clearInterval(interval);
+            }, [alertThreshold, warningThreshold, soundEnabled, currentOut]);
 
-  const handleTeacherLogin = () => {
-    // Don't allow teacher login in student-only mode
-    if (isStudentOnly) return;
-    
-    if (teacherPassword === '27') {
-      setUserRole('teacher');
-      setTeacherPassword('');
-      addNotification('Teacher login successful', 'success');
-    } else {
-      addNotification('Incorrect teacher password', 'error');
-      setTeacherPassword('');
-    }
-  };
+            // Helper functions
+            const addNotification = (message, type = 'info') => {
+                const notification = { id: Date.now(), message, type, timestamp: new Date() };
+                setNotifications(prev => [notification, ...prev.slice(0, 4)]);
+                
+                if (type !== 'error') {
+                    setTimeout(() => {
+                        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+                    }, 5000);
+                }
+            };
 
-  const handleLogout = () => {
-    // In student-only mode, stay in student mode
-    if (isStudentOnly) return;
-    
-    setUserRole('student');
-    setMode('student');
-    addNotification('Logged out successfully', 'info');
-  };
+            const removeNotification = (id) => {
+                setNotifications(prev => prev.filter(n => n.id !== id));
+            };
 
-  const addStudent = () => {
-    if (!newStudentName.trim()) return;
-    
-    const studentKey = selectedClass + '-' + newStudentName;
-    
-    // Check if student already exists
-    if (students[studentKey]) {
-      addNotification('Student already exists in this class', 'warning');
-      return;
-    }
-    
-    setStudents(prev => ({
-      ...prev,
-      [studentKey]: {
-        name: newStudentName,
-        gender: newStudentGender,
-        class: selectedClass,
-        dailyUsed: 0,
-        lastUsed: null,
-        createdDate: new Date().toISOString()
-      }
-    }));
+            const playAlertSound = () => {
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                } catch (error) {
+                    console.warn('Audio not available');
+                }
+            };
 
-    setTimeTracking(prev => ({
-      ...prev,
-      [studentKey]: {
-        daily: 0,
-        weekly: 0,
-        monthly: 0,
-        sessions: [],
-        totalSessions: 0,
-        averageTime: 0
-      }
-    }));
+            const formatTime = (ms) => {
+                const seconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                return minutes + ':' + remainingSeconds.toString().padStart(2, '0');
+            };
 
-    setNewStudentName('');
-    addNotification(`Added ${newStudentName} to ${selectedClass} class`, 'success');
-  };
+            const isOverTime = (ms) => ms > alertThreshold * 60 * 1000;
+            const isWarningTime = (ms) => ms > warningThreshold * 60 * 1000;
 
-  const removeStudent = (studentKey) => {
-    const student = students[studentKey];
-    setStudents(prev => {
-      const newStudents = { ...prev };
-      delete newStudents[studentKey];
-      return newStudents;
-    });
-    
-    setTimeTracking(prev => {
-      const newTracking = { ...prev };
-      delete newTracking[studentKey];
-      return newTracking;
-    });
+            // Authentication
+            const handleTeacherLogin = () => {
+                if (isStudentOnly) return;
+                
+                if (teacherPassword === '27') {
+                    setUserRole('teacher');
+                    setTeacherPassword('');
+                    addNotification('Teacher login successful', 'success');
+                } else {
+                    addNotification('Incorrect teacher password', 'error');
+                    setTeacherPassword('');
+                }
+            };
 
-    setQueues(prev => ({
-      boys: prev.boys.filter(item => item.key !== studentKey),
-      girls: prev.girls.filter(item => item.key !== studentKey)
-    }));
-    
-    addNotification(`Removed ${student?.name} from system`, 'info');
-  };
+            const handleLogout = () => {
+                if (isStudentOnly) return;
+                setUserRole('student');
+                setMode('student');
+                addNotification('Logged out successfully', 'info');
+            };
 
-  const addVisitorToQueue = () => {
-    if (!newStudentName.trim()) return;
-    
-    const timestamp = Date.now();
-    const studentKey = `visitor-${timestamp}`;
-    const visitorData = {
-      name: newStudentName + ' (Visitor)',
-      gender: newStudentGender,
-      class: selectedClass,
-      dailyUsed: 0,
-      lastUsed: null,
-      isVisitor: true
-    };
+            // Student management
+            const addStudent = () => {
+                if (!newStudentName.trim()) return;
+                
+                const studentKey = selectedClass + '-' + newStudentName;
+                
+                if (students[studentKey]) {
+                    addNotification('Student already exists in this class', 'warning');
+                    return;
+                }
+                
+                setStudents(prev => ({
+                    ...prev,
+                    [studentKey]: {
+                        name: newStudentName,
+                        gender: newStudentGender,
+                        class: selectedClass,
+                        dailyUsed: 0,
+                        lastUsed: null,
+                        createdDate: new Date().toISOString()
+                    }
+                }));
 
-    setStudents(prev => ({
-      ...prev,
-      [studentKey]: visitorData
-    }));
+                setNewStudentName('');
+                addNotification(`Added ${newStudentName} to ${selectedClass} class`, 'success');
+            };
 
-    setTimeTracking(prev => ({
-      ...prev,
-      [studentKey]: {
-        daily: 0,
-        weekly: 0,
-        monthly: 0,
-        sessions: [],
-        totalSessions: 0,
-        averageTime: 0
-      }
-    }));
+            const removeStudent = (studentKey) => {
+                const student = students[studentKey];
+                setStudents(prev => {
+                    const newStudents = { ...prev };
+                    delete newStudents[studentKey];
+                    return newStudents;
+                });
+                
+                setQueues(prev => ({
+                    boys: prev.boys.filter(item => item.key !== studentKey),
+                    girls: prev.girls.filter(item => item.key !== studentKey)
+                }));
+                
+                addNotification(`Removed ${student?.name} from system`, 'info');
+            };
 
-    const genderQueue = newStudentGender === 'boy' ? 'boys' : 'girls';
-    setQueues(prev => ({
-      ...prev,
-      [genderQueue]: [...prev[genderQueue], { key: studentKey, student: visitorData }]
-    }));
-
-    setNewStudentName('');
-    addNotification(`Added visitor to ${genderQueue} queue`, 'success');
-  };
-
-  const getClassStudents = (className) => {
-    return Object.entries(students).filter(([key, student]) => 
-      student.class === className && !student.isVisitor
-    );
-  };
-
-  const addToQueue = () => {
-    if (!selectedStudent) return;
-
-    const student = students[selectedStudent];
-    if (!student) return;
-
-    // Check daily usage limit
-    if (student.dailyUsed >= maxDailyUses) {
-      const today = new Date().toDateString();
-      if (student.lastUsed === today) {
-        setOverrideStudent({
-          key: selectedStudent,
-          student: student,
-          reason: 'daily_limit'
-        });
-        setShowOverride(true);
-        return;
-      }
-    }
-
-    const genderQueue = student.gender === 'boy' ? 'boys' : 'girls';
-    
-    if (queues[genderQueue].find(s => s.key === selectedStudent)) {
-      addNotification('Student already in queue', 'warning');
-      return;
-    }
-
-    setQueues(prev => ({
-      ...prev,
-      [genderQueue]: [...prev[genderQueue], { key: selectedStudent, student }]
-    }));
-
-    setSelectedStudent('');
-    addNotification(`${student.name} added to queue`, 'success');
-  };
-
-  const sendToBathroom = (gender) => {
-    const genderQueue = gender === 'boy' ? 'boys' : 'girls';
-    if (queues[genderQueue].length === 0 || currentOut[gender]) return;
-
-    const nextStudent = queues[genderQueue][0];
-    
-    setCurrentOut(prev => ({ ...prev, [gender]: nextStudent }));
-    setTimers(prev => ({ 
-      ...prev, 
-      [gender]: { 
-        startTime: Date.now(), 
-        elapsed: 0,
-        alertTriggered: false,
-        warningTriggered: false
-      }
-    }));
-    
-    setQueues(prev => ({
-      ...prev,
-      [genderQueue]: prev[genderQueue].slice(1)
-    }));
-    
-    addNotification(`${nextStudent.student.name} sent to bathroom`, 'info');
-  };
-
-  const returnFromBathroom = (gender) => {
-    if (!currentOut[gender]) return;
-
-    const student = currentOut[gender];
-    const sessionTime = timers[gender] ? timers[gender].elapsed || 0 : 0;
-
-    setTimeTracking(prev => {
-      const studentTracking = prev[student.key] || { 
-        daily: 0, 
-        weekly: 0, 
-        monthly: 0, 
-        sessions: [],
-        totalSessions: 0,
-        averageTime: 0
-      };
-      
-      const newSessions = [...studentTracking.sessions, {
-        date: new Date(),
-        duration: sessionTime
-      }];
-      
-      const totalTime = studentTracking.daily + sessionTime;
-      const avgTime = newSessions.length > 0 ? 
-        newSessions.reduce((sum, session) => sum + session.duration, 0) / newSessions.length : 0;
-      
-      return {
-        ...prev,
-        [student.key]: {
-          daily: studentTracking.daily + sessionTime,
-          weekly: studentTracking.weekly + sessionTime,
-          monthly: studentTracking.monthly + sessionTime,
-          sessions: newSessions,
-          totalSessions: newSessions.length,
-          averageTime: avgTime
-        }
-      };
-    });
-
-    setStudents(prev => ({
-      ...prev,
-      [student.key]: {
-        ...prev[student.key],
-        dailyUsed: (prev[student.key].dailyUsed || 0) + 1,
-        lastUsed: new Date().toDateString()
-      }
-    }));
-
-    setCurrentOut(prev => ({ ...prev, [gender]: null }));
-    setTimers(prev => ({ ...prev, [gender]: null }));
-
-    addNotification(`${student.student.name} returned (${formatTime(sessionTime)})`, 'success');
-
-    // Auto-send next student
-    setTimeout(() => {
-      const genderQueue = gender === 'boy' ? 'boys' : 'girls';
-      if (queues[genderQueue].length > 0) {
-        sendToBathroom(gender);
-      }
-    }, 100);
-  };
-
-  const handleOverride = (accept) => {
-    if (password !== '27') {
-      addNotification('Incorrect override password', 'error');
-      setPassword('');
-      return;
-    }
-
-    if (accept && overrideStudent) {
-      const student = overrideStudent.student;
-      const genderQueue = student.gender === 'boy' ? 'boys' : 'girls';
-      
-      setQueues(prev => ({
-        ...prev,
-        [genderQueue]: [...prev[genderQueue], { key: overrideStudent.key, student }]
-      }));
-      
-      addNotification(`Override approved for ${student.name}`, 'warning');
-    } else {
-      addNotification('Override denied', 'info');
-    }
-
-    setShowOverride(false);
-    setOverrideStudent(null);
-    setPassword('');
-  };
-
-  const formatTime = (ms) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return minutes + ':' + remainingSeconds.toString().padStart(2, '0');
-  };
-
-  const isOverTime = (ms) => ms > alertThreshold * 60 * 1000;
-  const isWarningTime = (ms) => ms > warningThreshold * 60 * 1000;
-
-  // Export data functionality
-  const exportData = () => {
-    const data = {
-      students,
-      timeTracking,
-      exportDate: new Date().toISOString(),
-      version: '2.0'
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bathroom-system-data-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    addNotification('Data exported successfully', 'success');
-  };
-
-  const clearAllData = () => {
-    if (window.confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-      setStudents({});
-      setTimeTracking({});
-      setQueues({ boys: [], girls: [] });
-      setCurrentOut({ boy: null, girl: null });
-      setTimers({ boy: null, girl: null });
-      localStorage.removeItem('bathroomSystem_students');
-      localStorage.removeItem('bathroomSystem_timeTracking');
-      addNotification('All data cleared', 'warning');
-    }
-  };
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setUploadError('');
-
-    try {
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      
-      if (lines.length === 0) {
-        setUploadError('File is empty');
-        return;
-      }
-
-      let addedCount = 0;
-      let skippedCount = 0;
-      const errors = [];
-
-      // Process each line (expecting format: Name, Gender, Class or just Name,Gender,Class)
-      lines.forEach((line, index) => {
-        const parts = line.split(',').map(part => part.trim());
-        
-        if (parts.length < 3) {
-          errors.push(`Line ${index + 1}: Missing data (need Name, Gender, Class)`);
-          return;
-        }
-
-        const [name, gender, className] = parts;
-        
-        // Validate data
-        if (!name) {
-          errors.push(`Line ${index + 1}: Missing name`);
-          return;
-        }
-        
-        if (!['boy', 'girl', 'male', 'female', 'm', 'f'].includes(gender.toLowerCase())) {
-          errors.push(`Line ${index + 1}: Invalid gender "${gender}" (use: boy, girl, male, female, m, or f)`);
-          return;
-        }
-        
-        if (!classes.includes(className)) {
-          errors.push(`Line ${index + 1}: Invalid class "${className}" (available: ${classes.join(', ')})`);
-          return;
-        }
-
-        // Normalize gender
-        const normalizedGender = ['male', 'boy', 'm'].includes(gender.toLowerCase()) ? 'boy' : 'girl';
-        
-        const studentKey = className + '-' + name;
-        
-        // Check if student already exists
-        if (students[studentKey]) {
-          skippedCount++;
-          return;
-        }
-
-        // Add student
-        setStudents(prev => ({
-          ...prev,
-          [studentKey]: {
-            name: name,
-            gender: normalizedGender,
-            class: className,
-            dailyUsed: 0,
-            lastUsed: null,
-            createdDate: new Date().toISOString()
-          }
-        }));
-
-        setTimeTracking(prev => ({
-          ...prev,
-          [studentKey]: {
-            daily: 0,
-            weekly: 0,
-            monthly: 0,
-            sessions: [],
-            totalSessions: 0,
-            averageTime: 0
-          }
-        }));
-
-        addedCount++;
-      });
-
-      // Show results
-      if (errors.length > 0) {
-        setUploadError(`Errors found:\n${errors.join('\n')}`);
-      }
-      
-      if (addedCount > 0) {
-        addNotification(`Successfully added ${addedCount} students`, 'success');
-      }
-      
-      if (skippedCount > 0) {
-        addNotification(`Skipped ${skippedCount} duplicate students`, 'warning');
-      }
-
-      if (addedCount === 0 && errors.length === 0) {
-        addNotification('No new students were added', 'info');
-      }
-
-    } catch (error) {
-      setUploadError(`Error reading file: ${error.message}`);
-    }
-
-    // Clear file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const downloadSampleCSV = () => {
-    const sampleData = `John Doe,boy,Purple
-Jane Smith,girl,Blue
-Mike Johnson,male,Green
-Sarah Wilson,female,Yellow
-Tom Brown,m,Red
-Lisa Davis,f,Orange`;
-    
-    const blob = new Blob([sampleData], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'student-upload-sample.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    addNotification('Sample CSV downloaded', 'success');
-  };
-
-  // Analytics functions
-  const getAnalyticsData = () => {
-    const totalStudents = Object.keys(students).length;
-    const activeToday = Object.values(students).filter(s => 
-      s.lastUsed === new Date().toDateString()
-    ).length;
-    
-    const allSessions = Object.values(timeTracking).flatMap(t => t.sessions || []);
-    const todaySessions = allSessions.filter(s => 
-      new Date(s.date).toDateString() === new Date().toDateString()
-    );
-    
-    const avgSessionTime = allSessions.length > 0 ? 
-      allSessions.reduce((sum, s) => sum + s.duration, 0) / allSessions.length : 0;
-    
-    const peakHours = {};
-    todaySessions.forEach(session => {
-      const hour = new Date(session.date).getHours();
-      peakHours[hour] = (peakHours[hour] || 0) + 1;
-    });
-    
-    const peakHour = Object.entries(peakHours).reduce((max, [hour, count]) => 
-      count > (peakHours[max] || 0) ? hour : max, '0'
-    );
-
-    return {
-      totalStudents,
-      activeToday,
-      totalSessions: allSessions.length,
-      todaySessions: todaySessions.length,
-      avgSessionTime,
-      peakHour: peakHour + ':00'
-    };
-  };
-
-  const themeClasses = darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900';
-
-  const renderNotifications = () => (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-      {notifications.map(notification => (
-        <div 
-          key={notification.id}
-          className={`p-3 rounded-lg shadow-lg flex items-center justify-between ${
-            notification.type === 'error' ? 'bg-red-500 text-white' :
-            notification.type === 'warning' ? 'bg-yellow-500 text-black' :
-            notification.type === 'success' ? 'bg-green-500 text-white' :
-            'bg-blue-500 text-white'
-          }`}
-        >
-          <div className="flex items-center">
-            <Bell className="w-4 h-4 mr-2" />
-            <span className="text-sm">{notification.message}</span>
-          </div>
-          <button 
-            onClick={() => removeNotification(notification.id)}
-            className="ml-2 text-lg font-bold hover:opacity-70"
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderAnalytics = () => {
-    const analytics = getAnalyticsData();
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg max-w-4xl w-full mx-4 max-h-96 overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold flex items-center">
-              <BarChart3 className="mr-2" />
-              Analytics Dashboard
-            </h3>
-            <button 
-              onClick={() => setShowAnalytics(false)}
-              className="text-gray-500 hover:text-gray-700 text-xl font-bold"
-            >
-              ×
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-blue-800">{analytics.totalStudents}</div>
-              <div className="text-sm text-blue-600">Total Students</div>
-            </div>
-            <div className="bg-green-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-green-800">{analytics.activeToday}</div>
-              <div className="text-sm text-green-600">Active Today</div>
-            </div>
-            <div className="bg-purple-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-purple-800">{analytics.todaySessions}</div>
-              <div className="text-sm text-purple-600">Today's Sessions</div>
-            </div>
-            <div className="bg-orange-100 p-4 rounded-lg text-center">
-              <div className="text-2xl font-bold text-orange-800">{formatTime(analytics.avgSessionTime)}</div>
-              <div className="text-sm text-orange-600">Avg Session Time</div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Class Distribution</h4>
-              {classes.map(className => {
-                const classStudents = getClassStudents(className);
-                return (
-                  <div key={className} className="flex justify-between items-center py-1">
-                    <span>{className}</span>
-                    <span className="font-bold">{classStudents.length}</span>
-                  </div>
+            const getClassStudents = (className) => {
+                return Object.entries(students).filter(([key, student]) => 
+                    student.class === className && !student.isVisitor
                 );
-              })}
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Usage Statistics</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Peak Hour:</span>
-                  <span className="font-bold">{analytics.peakHour}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Sessions:</span>
-                  <span className="font-bold">{analytics.totalSessions}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Current Queued:</span>
-                  <span className="font-bold">{queues.boys.length + queues.girls.length}</span>
-                </div>
-              </div>
-            </div>
-        </div>
-      </div>
-      </div>
-    );
-  };
+            };
 
-  const renderStudentMode = () => (
-    <div className={`p-6 ${darkMode ? 'bg-blue-900' : 'bg-blue-50'} min-h-screen`}>
-      <h1 className="text-3xl font-bold mb-6 text-center text-blue-800">
-        <Users className="inline mr-2" />
-        Bathroom Queue
-      </h1>
-      
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2 text-gray-700">Select Your Class:</label>
-          <select 
-            value={selectedClass} 
-            onChange={(e) => setSelectedClass(e.target.value)}
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-          >
-            {classes.map(cls => (
-              <option key={cls} value={cls}>{cls}</option>
-            ))}
-          </select>
-        </div>
+            // Queue management
+            const addToQueue = () => {
+                if (!selectedStudent) return;
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2 text-gray-700">Select Your Name:</label>
-          <select 
-            value={selectedStudent} 
-            onChange={(e) => setSelectedStudent(e.target.value)}
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Choose your name...</option>
-            {getClassStudents(selectedClass).map(([key, student]) => (
-              <option key={key} value={key}>
-                {student.name} {student.dailyUsed >= maxDailyUses ? '⚠️' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+                const student = students[selectedStudent];
+                if (!student) return;
 
-        <button 
-          onClick={addToQueue}
-          disabled={!selectedStudent}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-        >
-          Join Bathroom Queue
-        </button>
-        
-        {/* Quick stats */}
-        <div className="mt-4 p-3 bg-blue-50 rounded text-center">
-          <div className="text-sm text-blue-600">
-            Current Queue: {queues.boys.length} boys, {queues.girls.length} girls
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+                if (student.dailyUsed >= maxDailyUses) {
+                    const today = new Date().toDateString();
+                    if (student.lastUsed === today) {
+                        setOverrideStudent({ key: selectedStudent, student: student, reason: 'daily_limit' });
+                        setShowOverride(true);
+                        return;
+                    }
+                }
 
-  const renderDisplayMode = () => (
-    <div className={`p-6 ${themeClasses} min-h-screen`}>
-      <h1 className="text-3xl font-bold mb-6 text-center">
-        <Eye className="inline mr-2" />
-        Bathroom Status
-      </h1>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-        <div className="bg-green-300 rounded-lg p-6">
-          <h2 className="text-2xl font-bold mb-4 text-green-900 text-center">BOYS</h2>
-          
-          {currentOut.boy ? (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-lg mb-2">Currently Out:</h3>
-              <div className={`p-3 rounded ${
-                isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'bg-red-100 animate-pulse' :
-                isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'bg-yellow-100' : 'bg-green-100'
-              }`}>
-                <div className="text-center mb-2">
-                  <span className="font-bold text-3xl">{currentOut.boy.student.name}</span>
+                const genderQueue = student.gender === 'boy' ? 'boys' : 'girls';
+                
+                if (queues[genderQueue].find(s => s.key === selectedStudent)) {
+                    addNotification('Student already in queue', 'warning');
+                    return;
+                }
+
+                setQueues(prev => ({
+                    ...prev,
+                    [genderQueue]: [...prev[genderQueue], { key: selectedStudent, student }]
+                }));
+
+                setSelectedStudent('');
+                addNotification(`${student.name} added to queue`, 'success');
+            };
+
+            const sendToBathroom = (gender) => {
+                const genderQueue = gender === 'boy' ? 'boys' : 'girls';
+                if (queues[genderQueue].length === 0 || currentOut[gender]) return;
+
+                const nextStudent = queues[genderQueue][0];
+                
+                setCurrentOut(prev => ({ ...prev, [gender]: nextStudent }));
+                setTimers(prev => ({ 
+                    ...prev, 
+                    [gender]: { 
+                        startTime: Date.now(), 
+                        elapsed: 0,
+                        alertTriggered: false,
+                        warningTriggered: false
+                    }
+                }));
+                
+                setQueues(prev => ({
+                    ...prev,
+                    [genderQueue]: prev[genderQueue].slice(1)
+                }));
+                
+                addNotification(`${nextStudent.student.name} sent to bathroom`, 'info');
+            };
+
+            const returnFromBathroom = (gender) => {
+                if (!currentOut[gender]) return;
+
+                const student = currentOut[gender];
+                const sessionTime = timers[gender] ? timers[gender].elapsed || 0 : 0;
+
+                setStudents(prev => ({
+                    ...prev,
+                    [student.key]: {
+                        ...prev[student.key],
+                        dailyUsed: (prev[student.key].dailyUsed || 0) + 1,
+                        lastUsed: new Date().toDateString()
+                    }
+                }));
+
+                setCurrentOut(prev => ({ ...prev, [gender]: null }));
+                setTimers(prev => ({ ...prev, [gender]: null }));
+
+                addNotification(`${student.student.name} returned (${formatTime(sessionTime)})`, 'success');
+
+                setTimeout(() => {
+                    const genderQueue = gender === 'boy' ? 'boys' : 'girls';
+                    if (queues[genderQueue].length > 0) {
+                        sendToBathroom(gender);
+                    }
+                }, 100);
+            };
+
+            const handleOverride = (accept) => {
+                if (password !== '27') {
+                    addNotification('Incorrect override password', 'error');
+                    setPassword('');
+                    return;
+                }
+
+                if (accept && overrideStudent) {
+                    const student = overrideStudent.student;
+                    const genderQueue = student.gender === 'boy' ? 'boys' : 'girls';
+                    
+                    setQueues(prev => ({
+                        ...prev,
+                        [genderQueue]: [...prev[genderQueue], { key: overrideStudent.key, student }]
+                    }));
+                    
+                    addNotification(`Override approved for ${student.name}`, 'warning');
+                } else {
+                    addNotification('Override denied', 'info');
+                }
+
+                setShowOverride(false);
+                setOverrideStudent(null);
+                setPassword('');
+            };
+
+            const clearAllData = () => {
+                if (window.confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                    setStudents({});
+                    setQueues({ boys: [], girls: [] });
+                    setCurrentOut({ boy: null, girl: null });
+                    setTimers({ boy: null, girl: null });
+                    localStorage.removeItem('bathroomSystem_students');
+                    localStorage.removeItem('bathroomSystem_settings');
+                    addNotification('All data cleared', 'warning');
+                }
+            };
+
+            // Render functions
+            const renderNotifications = () => (
+                <div className="notification space-y-2">
+                    {notifications.map(notification => (
+                        <div 
+                            key={notification.id}
+                            className={`p-3 rounded-lg shadow-lg flex items-center justify-between ${
+                                notification.type === 'error' ? 'bg-red-500 text-white' :
+                                notification.type === 'warning' ? 'bg-yellow-500 text-black' :
+                                notification.type === 'success' ? 'bg-green-500 text-white' :
+                                'bg-blue-500 text-white'
+                            }`}
+                        >
+                            <span className="text-sm">{notification.message}</span>
+                            <button 
+                                onClick={() => removeNotification(notification.id)}
+                                className="ml-2 text-lg font-bold hover:opacity-70"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    ))}
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-xs text-gray-600">{currentOut.boy.student.class} Class</div>
-                  <span className={`text-lg font-bold ${
-                    isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-red-600' :
-                    isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
-                  }`}>
-                    {formatTime(timers.boy ? timers.boy.elapsed || 0 : 0)}
-                  </span>
-                </div>
-                {isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) && (
-                  <div className="text-xs text-red-600 font-bold mt-1">⚠️ OVERTIME ALERT!</div>
-                )}
-              </div>
-              <button 
-                onClick={() => returnFromBathroom('boy')}
-                className="w-full mt-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
-              >
-                Return
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <div className="text-center text-gray-500 py-4">
-                No one currently out
-              </div>
-              {queues.boys.length > 0 && (
-                <button 
-                  onClick={() => sendToBathroom('boy')}
-                  className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
-                >
-                  Send Next Boy
-                </button>
-              )}
-            </div>
-          )}
+            );
 
-          <div className="bg-white rounded-lg p-4">
-            <h3 className="font-semibold text-lg mb-2">Queue ({queues.boys.length}):</h3>
-            {queues.boys.length === 0 ? (
-              <div className="text-center text-gray-500 py-2">No one in queue</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {queues.boys.slice(0, 2).map((item, index) => (
-                  <div key={item.key} className="p-2 bg-gray-50 rounded border">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-sm ${item.student.dailyUsed >= maxDailyUses ? 'animate-pulse text-red-600 font-bold' : ''}`}>
-                        {index + 1}. {item.student.name}
-                      </span>
+            const renderStudentMode = () => (
+                <div className={`p-6 ${darkMode ? 'bg-blue-900' : 'bg-blue-50'} min-h-screen`}>
+                    <h1 className="text-3xl font-bold mb-6 text-center text-blue-800">
+                        📚 Bathroom Queue
+                    </h1>
+                    
+                    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium mb-2 text-gray-700">Select Your Class:</label>
+                            <select 
+                                value={selectedClass} 
+                                onChange={(e) => setSelectedClass(e.target.value)}
+                                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                            >
+                                {classes.map(cls => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium mb-2 text-gray-700">Select Your Name:</label>
+                            <select 
+                                value={selectedStudent} 
+                                onChange={(e) => setSelectedStudent(e.target.value)}
+                                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Choose your name...</option>
+                                {getClassStudents(selectedClass).map(([key, student]) => (
+                                    <option key={key} value={key}>
+                                        {student.name} {student.dailyUsed >= maxDailyUses ? '⚠️' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <button 
+                            onClick={addToQueue}
+                            disabled={!selectedStudent}
+                            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                        >
+                            Join Bathroom Queue
+                        </button>
+                        
+                        <div className="mt-4 p-3 bg-blue-50 rounded text-center">
+                            <div className="text-sm text-blue-600">
+                                Current Queue: {queues.boys.length} boys, {queues.girls.length} girls
+                            </div>
+                        </div>
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      {item.student.class} • Uses: {item.student.dailyUsed || 0}
+                </div>
+            );
+
+            const renderDisplayMode = () => (
+                <div className={`p-6 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} min-h-screen`}>
+                    <h1 className="text-3xl font-bold mb-6 text-center">
+                        👁️ Bathroom Status
+                    </h1>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                        {/* Boys Section */}
+                        <div className="bg-green-300 rounded-lg p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-green-900 text-center">BOYS</h2>
+                            
+                            {currentOut.boy ? (
+                                <div className="bg-white rounded-lg p-4 mb-4">
+                                    <h3 className="font-semibold text-lg mb-2">Currently Out:</h3>
+                                    <div className={`p-3 rounded ${
+                                        isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'bg-red-100 animate-pulse' :
+                                        isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'bg-yellow-100' : 'bg-green-100'
+                                    }`}>
+                                        <div className="text-center mb-2">
+                                            <span className="font-bold text-3xl">{currentOut.boy.student.name}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-xs text-gray-600">{currentOut.boy.student.class} Class</div>
+                                            <span className={`text-lg font-bold ${
+                                                isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-red-600' :
+                                                isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
+                                            }`}>
+                                                {formatTime(timers.boy ? timers.boy.elapsed || 0 : 0)}
+                                            </span>
+                                        </div>
+                                        {isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) && (
+                                            <div className="text-xs text-red-600 font-bold mt-1">⚠️ OVERTIME ALERT!</div>
+                                        )}
+                                    </div>
+                                    <button 
+                                        onClick={() => returnFromBathroom('boy')}
+                                        className="w-full mt-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                                    >
+                                        Return
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-lg p-4 mb-4">
+                                    <div className="text-center text-gray-500 py-4">
+                                        No one currently out
+                                    </div>
+                                    {queues.boys.length > 0 && (
+                                        <button 
+                                            onClick={() => sendToBathroom('boy')}
+                                            className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                                        >
+                                            Send Next Boy
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="bg-white rounded-lg p-4">
+                                <h3 className="font-semibold text-lg mb-2">Queue ({queues.boys.length}):</h3>
+                                {queues.boys.length === 0 ? (
+                                    <div className="text-center text-gray-500 py-2">No one in queue</div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {queues.boys.slice(0, 3).map((item, index) => (
+                                            <div key={item.key} className="p-2 bg-gray-50 rounded border">
+                                                <div className="flex justify-between items-center">
+                                                    <span className={`text-sm ${item.student.dailyUsed >= maxDailyUses ? 'animate-pulse text-red-600 font-bold' : ''}`}>
+                                                        {index + 1}. {item.student.name}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                    {item.student.class} • Uses: {item.student.dailyUsed || 0}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {queues.boys.length > 3 && (
+                                            <div className="text-center text-xs text-gray-500">
+                                                +{queues.boys.length - 3} more students
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Girls Section */}
+                        <div className="bg-blue-300 rounded-lg p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-blue-900 text-center">GIRLS</h2>
+                            
+                            {currentOut.girl ? (
+                                <div className="bg-white rounded-lg p-4 mb-4">
+                                    <h3 className="font-semibold text-lg mb-2">Currently Out:</h3>
+                                    <div className={`p-3 rounded ${
+                                        isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'bg-red-100 animate-pulse' :
+                                        isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'bg-yellow-100' : 'bg-green-100'
+                                    }`}>
+                                        <div className="text-center mb-2">
+                                            <span className="font-bold text-3xl">{currentOut.girl.student.name}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-xs text-gray-600">{currentOut.girl.student.class} Class</div>
+                                            <span className={`text-lg font-bold ${
+                                                isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-red-600' :
+                                                isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
+                                            }`}>
+                                                {formatTime(timers.girl ? timers.girl.elapsed || 0 : 0)}
+                                            </span>
+                                        </div>
+                                        {isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) && (
+                                            <div className="text-xs text-red-600 font-bold mt-1">⚠️ OVERTIME ALERT!</div>
+                                        )}
+                                    </div>
+                                    <button 
+                                        onClick={() => returnFromBathroom('girl')}
+                                        className="w-full mt-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                                    >
+                                        Return
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-lg p-4 mb-4">
+                                    <div className="text-center text-gray-500 py-4">
+                                        No one currently out
+                                    </div>
+                                    {queues.girls.length > 0 && (
+                                        <button 
+                                            onClick={() => sendToBathroom('girl')}
+                                            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                                        >
+                                            Send Next Girl
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="bg-white rounded-lg p-4">
+                                <h3 className="font-semibold text-lg mb-2">Queue ({queues.girls.length}):</h3>
+                                {queues.girls.length === 0 ? (
+                                    <div className="text-center text-gray-500 py-2">No one in queue</div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {queues.girls.slice(0, 3).map((item, index) => (
+                                            <div key={item.key} className="p-2 bg-gray-50 rounded border">
+                                                <div className="flex justify-between items-center">
+                                                    <span className={`text-sm ${item.student.dailyUsed >= maxDailyUses ? 'animate-pulse text-red-600 font-bold' : ''}`}>
+                                                        {index + 1}. {item.student.name}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                    {item.student.class} • Uses: {item.student.dailyUsed || 0}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {queues.girls.length > 3 && (
+                                            <div className="text-center text-xs text-gray-500">
+                                                +{queues.girls.length - 3} more students
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {queues.boys.length > 2 && (
-              <div className="mt-2 text-center text-xs text-gray-500">
-                +{queues.boys.length - 2} more students in queue
-              </div>
-            )}
-          </div>
-        </div>
 
-        <div className="bg-blue-300 rounded-lg p-6">
-          <h2 className="text-2xl font-bold mb-4 text-blue-900 text-center">GIRLS</h2>
-          
-          {currentOut.girl ? (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-lg mb-2">Currently Out:</h3>
-              <div className={`p-3 rounded ${
-                isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'bg-red-100 animate-pulse' :
-                isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'bg-yellow-100' : 'bg-green-100'
-              }`}>
-                <div className="text-center mb-2">
-                  <span className="font-bold text-3xl">{currentOut.girl.student.name}</span>
+                    {/* Override Modal */}
+                    {showOverride && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+                                <h3 className="text-lg font-bold mb-4 text-red-600">Daily Limit Exceeded</h3>
+                                <p className="mb-4">
+                                    {overrideStudent?.student?.name} has already used the bathroom {maxDailyUses} times today. 
+                                    Do you want to allow them to go anyway?
+                                </p>
+                                <div className="mb-4">
+                                    <input
+                                        type="password"
+                                        placeholder="Enter password (27)"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => handleOverride(true)}
+                                        className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                                    >
+                                        Accept
+                                    </button>
+                                    <button 
+                                        onClick={() => handleOverride(false)}
+                                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors"
+                                    >
+                                        Deny
+                                    </button>
+                                    <button 
+                                        onClick={() => {setShowOverride(false); setPassword('');}}
+                                        className="px-4 py-2 border rounded hover:bg-gray-50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-xs text-gray-600">{currentOut.girl.student.class} Class</div>
-                  <span className={`text-lg font-bold ${
-                    isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-red-600' :
-                    isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
-                  }`}>
-                    {formatTime(timers.girl ? timers.girl.elapsed || 0 : 0)}
-                  </span>
-                </div>
-                {isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) && (
-                  <div className="text-xs text-red-600 font-bold mt-1">⚠️ OVERTIME ALERT!</div>
-                )}
-              </div>
-              <button 
-                onClick={() => returnFromBathroom('girl')}
-                className="w-full mt-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
-              >
-                Return
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <div className="text-center text-gray-500 py-4">
-                No one currently out
-              </div>
-              {queues.girls.length > 0 && (
-                <button 
-                  onClick={() => sendToBathroom('girl')}
-                  className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
-                >
-                  Send Next Girl
-                </button>
-              )}
-            </div>
-          )}
+            );
 
-          <div className="bg-white rounded-lg p-4">
-            <h3 className="font-semibold text-lg mb-2">Queue ({queues.girls.length}):</h3>
-            {queues.girls.length === 0 ? (
-              <div className="text-center text-gray-500 py-2">No one in queue</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {queues.girls.slice(0, 2).map((item, index) => (
-                  <div key={item.key} className="p-2 bg-gray-50 rounded border">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-sm ${item.student.dailyUsed >= maxDailyUses ? 'animate-pulse text-red-600 font-bold' : ''}`}>
-                        {index + 1}. {item.student.name}
-                      </span>
+            const renderManageStudentsMode = () => (
+                <div className={`p-6 ${darkMode ? 'bg-purple-900' : 'bg-purple-50'} min-h-screen`}>
+                    <h1 className="text-3xl font-bold mb-6 text-center text-purple-800">
+                        👤 Manage Students
+                    </h1>
+                    
+                    <div className="max-w-4xl mx-auto">
+                        {/* Add Student Section */}
+                        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                            <h2 className="text-xl font-bold mb-4 text-center">Add Student</h2>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">Select Class:</label>
+                                    <select 
+                                        value={selectedClass} 
+                                        onChange={(e) => setSelectedClass(e.target.value)}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                                    >
+                                        {classes.map(cls => (
+                                            <option key={cls} value={cls}>{cls}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">Student Name:</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter student name"
+                                        value={newStudentName}
+                                        onChange={(e) => setNewStudentName(e.target.value)}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                                        onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">Gender:</label>
+                                    <select 
+                                        value={newStudentGender} 
+                                        onChange={(e) => setNewStudentGender(e.target.value)}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
+                                    >
+                                        <option value="boy">Boy</option>
+                                        <option value="girl">Girl</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={addStudent}
+                                disabled={!newStudentName.trim()}
+                                className="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 disabled:bg-gray-300 transition-colors"
+                            >
+                                Add Student to Class
+                            </button>
+                        </div>
+
+                        {/* Students by Class */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {classes.map(className => (
+                                <div key={className} className="bg-white rounded-lg shadow-lg p-4">
+                                    <h3 className="font-bold text-lg mb-3 text-center text-black">
+                                        {className} Class
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {getClassStudents(className).length === 0 ? (
+                                            <div className="text-center text-gray-500 py-4 text-sm">
+                                                No students added yet
+                                            </div>
+                                        ) : (
+                                            getClassStudents(className).map(([key, student]) => (
+                                                <div key={key} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
+                                                    <div className="flex items-center">
+                                                        <span className="mr-2">
+                                                            {student.gender === 'boy' ? '👦' : '👧'}
+                                                        </span>
+                                                        <div className="text-sm">
+                                                            <div className="font-medium">{student.name}</div>
+                                                            {student.dailyUsed > 0 && (
+                                                                <div className="text-xs text-gray-600">
+                                                                    Today: {student.dailyUsed} uses
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {student.dailyUsed >= maxDailyUses && (
+                                                            <span className="ml-2 text-xs bg-red-100 text-red-800 px-1 rounded">
+                                                                Limit reached
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => removeStudent(key)}
+                                                        className="text-red-500 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                    <div className="mt-3 pt-2 border-t text-center text-xs text-gray-500">
+                                        Total: {getClassStudents(className).length} students
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">
-                      {item.student.class} • Uses: {item.student.dailyUsed || 0}
+                </div>
+            );
+
+            const renderTeacherMode = () => (
+                <div className={`p-6 ${darkMode ? 'bg-green-900' : 'bg-green-50'} min-h-screen`}>
+                    <h1 className="text-3xl font-bold mb-6 text-center text-green-800">
+                        ⚙️ Teacher Mode - Settings & Control
+                    </h1>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        {/* Current Status */}
+                        <div className="bg-white rounded-lg p-6 shadow-lg">
+                            <h2 className="text-xl font-bold mb-4">🕐 Current Status</h2>
+                            <div className="space-y-4">
+                                <div className="p-3 bg-blue-50 rounded">
+                                    <h3 className="font-semibold">Currently Out:</h3>
+                                    {currentOut.boy && (
+                                        <div className="text-sm flex justify-between items-center">
+                                            <span>Boy: {currentOut.boy.student.name}</span>
+                                            <span className={`font-bold ${
+                                                isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-red-600' :
+                                                isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
+                                            }`}>
+                                                {formatTime(timers.boy ? timers.boy.elapsed || 0 : 0)}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {currentOut.girl && (
+                                        <div className="text-sm flex justify-between items-center">
+                                            <span>Girl: {currentOut.girl.student.name}</span>
+                                            <span className={`font-bold ${
+                                                isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-red-600' :
+                                                isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
+                                            }`}>
+                                                {formatTime(timers.girl ? timers.girl.elapsed || 0 : 0)}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {!currentOut.boy && !currentOut.girl && (
+                                        <div className="text-sm text-gray-500">No one currently out</div>
+                                    )}
+                                </div>
+                                <div className="p-3 bg-gray-50 rounded">
+                                    <h3 className="font-semibold">Queue Status:</h3>
+                                    <div className="text-sm">Boys in queue: {queues.boys.length}</div>
+                                    <div className="text-sm">Girls in queue: {queues.girls.length}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Settings */}
+                        <div className="bg-white rounded-lg p-6 shadow-lg">
+                            <h2 className="text-xl font-bold mb-4">⚙️ Settings</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Alert Threshold (minutes):</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="15"
+                                        value={alertThreshold}
+                                        onChange={(e) => setAlertThreshold(Number(e.target.value))}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Warning Threshold (minutes):</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={warningThreshold}
+                                        onChange={(e) => setWarningThreshold(Number(e.target.value))}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Max Daily Uses:</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={maxDailyUses}
+                                        onChange={(e) => setMaxDailyUses(Number(e.target.value))}
+                                        className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">Sound Alerts:</span>
+                                    <button
+                                        onClick={() => setSoundEnabled(!soundEnabled)}
+                                        className={`px-3 py-1 rounded text-sm ${soundEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
+                                    >
+                                        {soundEnabled ? '🔊 ON' : '🔇 OFF'}
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">Dark Mode:</span>
+                                    <button
+                                        onClick={() => setDarkMode(!darkMode)}
+                                        className={`px-3 py-1 rounded text-sm ${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'}`}
+                                    >
+                                        {darkMode ? 'ON' : 'OFF'}
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={clearAllData}
+                                    className="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors"
+                                >
+                                    Clear All Data
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {queues.girls.length > 2 && (
-              <div className="mt-2 text-center text-xs text-gray-500">
-                +{queues.girls.length - 2} more students in queue
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {showOverride && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold mb-4 text-red-600">Daily Limit Exceeded</h3>
-            <p className="mb-4">
-              {overrideStudent && overrideStudent.student ? overrideStudent.student.name : ''} has already used the bathroom {maxDailyUses} times today. 
-              Do you want to allow them to go anyway?
-            </p>
-            <div className="mb-4">
-              <input
-                type="password"
-                placeholder="Enter password (27)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => handleOverride(true)}
-                className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
-              >
-                Accept
-              </button>
-              <button 
-                onClick={() => handleOverride(false)}
-                className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors"
-              >
-                Deny
-              </button>
-              <button 
-                onClick={() => {setShowOverride(false); setPassword('');}}
-                className="px-4 py-2 border rounded hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderManageStudentsMode = () => (
-    <div className={`p-6 ${darkMode ? 'bg-purple-900' : 'bg-purple-50'} min-h-screen`}>
-      <h1 className="text-3xl font-bold mb-6 text-center text-purple-800">
-        <User className="inline mr-2" />
-        Manage Students
-      </h1>
-      
-      <div className="max-w-4xl mx-auto">
-        {/* File Upload Section */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Bulk Upload Students</h2>
-            <button
-              onClick={downloadSampleCSV}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors flex items-center"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download Sample CSV
-            </button>
-          </div>
-          
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-semibold mb-2">CSV Format Instructions:</h3>
-            <p className="text-sm text-gray-700 mb-2">
-              Your CSV file should have 3 columns in this order: <strong>Name, Gender, Class</strong>
-            </p>
-            <p className="text-sm text-gray-700 mb-2">
-              <strong>Gender options:</strong> boy, girl, male, female, m, f
-            </p>
-            <p className="text-sm text-gray-700">
-              <strong>Available classes:</strong> {classes.join(', ')}
-            </p>
-          </div>
-          
-          <div className="mb-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.txt"
-              onChange={handleFileUpload}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-          
-          {uploadError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
-              <p className="text-red-700 text-sm whitespace-pre-line">{uploadError}</p>
-            </div>
-          )}
-          
-          <div className="text-sm text-gray-600">
-            <strong>Example CSV content:</strong><br />
-            <code className="bg-gray-100 p-2 rounded block mt-1">
-              John Doe,boy,Purple<br />
-              Jane Smith,girl,Blue<br />
-              Mike Johnson,male,Green
-            </code>
-          </div>
-        </div>
-
-        {/* Manual Add Section */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-center">Add Individual Student</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">Select Class:</label>
-              <select 
-                value={selectedClass} 
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-              >
-                {classes.map(cls => (
-                  <option key={cls} value={cls}>{cls}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">Student Name:</label>
-              <input
-                type="text"
-                placeholder="Enter student name"
-                value={newStudentName}
-                onChange={(e) => setNewStudentName(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-                onKeyPress={(e) => e.key === 'Enter' && addStudent()}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">Gender:</label>
-              <select 
-                value={newStudentGender} 
-                onChange={(e) => setNewStudentGender(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="boy">Boy</option>
-                <option value="girl">Girl</option>
-              </select>
-            </div>
-          </div>
-
-          <button 
-            onClick={addStudent}
-            disabled={!newStudentName.trim()}
-            className="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 disabled:bg-gray-300 transition-colors"
-          >
-            Add Student to Class
-          </button>
-        </div>
-      </div>
-
-      {/* Students by Class */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {classes.map(className => (
-          <div key={className} className="bg-white rounded-lg shadow-lg p-4">
-            <h3 className="font-bold text-lg mb-3 text-center text-black">
-              {className} Class
-            </h3>
-            <div className="space-y-2">
-              {getClassStudents(className).length === 0 ? (
-                <div className="text-center text-gray-500 py-4 text-sm">
-                  No students added yet
-                </div>
-              ) : (
-                getClassStudents(className).map(([key, student]) => (
-                  <div key={key} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center">
-                      <span className="mr-2">
-                        {student.gender === 'boy' ? '👦' : '👧'}
-                      </span>
-                      <div className="text-sm">
-                        <div className="font-medium">{student.name}</div>
-                        {student.dailyUsed > 0 && (
-                          <div className="text-xs text-gray-600">
-                            Today: {student.dailyUsed} uses
-                          </div>
-                        )}
-                      </div>
-                      {student.dailyUsed >= maxDailyUses && (
-                        <span className="ml-2 text-xs bg-red-100 text-red-800 px-1 rounded">
-                          Limit reached
-                        </span>
-                      )}
+                    {/* Student Overview */}
+                    <div className="bg-white rounded-lg p-6 shadow-lg">
+                        <h2 className="text-xl font-bold mb-4">📊 Student Overview</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+                            {classes.map(className => {
+                                const classStudents = getClassStudents(className);
+                                return (
+                                    <div key={className} className="p-3 bg-gray-50 rounded">
+                                        <div className="font-bold text-lg">{classStudents.length}</div>
+                                        <div className="text-sm text-gray-600">{className}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <button 
-                      onClick={() => removeStudent(key)}
-                      className="text-red-500 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50 transition-colors"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="mt-3 pt-2 border-t text-center text-xs text-gray-500">
-              Total: {getClassStudents(className).length} students
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderTeacherMode = () => (
-    <div className={`p-6 ${darkMode ? 'bg-green-900' : 'bg-green-50'} min-h-screen`}>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-center text-green-800">
-          <Settings className="inline mr-2" />
-          Teacher Mode - Analytics & Control
-        </h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAnalytics(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
-          >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Analytics
-          </button>
-          <button
-            onClick={exportData}
-            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export Data
-          </button>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-bold mb-4 flex items-center">
-            <Clock className="mr-2" />
-            Current Status
-          </h2>
-          <div className="space-y-4">
-            <div className="p-3 bg-blue-50 rounded">
-              <h3 className="font-semibold">Currently Out:</h3>
-              {currentOut.boy && (
-                <div className="text-sm flex justify-between items-center">
-                  <span>Boy: {currentOut.boy.student.name}</span>
-                  <span className={`font-bold ${
-                    isOverTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-red-600' :
-                    isWarningTime(timers.boy ? timers.boy.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
-                  }`}>
-                    {formatTime(timers.boy ? timers.boy.elapsed || 0 : 0)}
-                  </span>
                 </div>
-              )}
-              {currentOut.girl && (
-                <div className="text-sm flex justify-between items-center">
-                  <span>Girl: {currentOut.girl.student.name}</span>
-                  <span className={`font-bold ${
-                    isOverTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-red-600' :
-                    isWarningTime(timers.girl ? timers.girl.elapsed || 0 : 0) ? 'text-yellow-600' : 'text-green-600'
-                  }`}>
-                    {formatTime(timers.girl ? timers.girl.elapsed || 0 : 0)}
-                  </span>
+            );
+
+            // Main render
+            return (
+                <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+                    {renderNotifications()}
+                    
+                    {/* Navigation Bar */}
+                    {!isStudentOnly && (
+                        <div className="bg-white shadow-sm border-b p-4">
+                            <div className="flex justify-center items-center space-x-4 flex-wrap">
+                                {userRole === 'student' ? (
+                                    <>
+                                        <div className="px-6 py-2 rounded-lg font-medium bg-blue-600 text-white">
+                                            👥 Student Mode
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="password"
+                                                placeholder="Teacher password"
+                                                value={teacherPassword}
+                                                onChange={(e) => setTeacherPassword(e.target.value)}
+                                                className="px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-green-500"
+                                                onKeyPress={(e) => e.key === 'Enter' && handleTeacherLogin()}
+                                            />
+                                            <button 
+                                                onClick={handleTeacherLogin}
+                                                className="px-4 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
+                                            >
+                                                Teacher Login
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button 
+                                            onClick={() => setMode('student')}
+                                            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                                                mode === 'student' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            👥 Student Mode
+                                        </button>
+                                        <button 
+                                            onClick={() => setMode('display')}
+                                            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                                                mode === 'display' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            👁️ Display Mode
+                                        </button>
+                                        <button 
+                                            onClick={() => setMode('manage')}
+                                            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                                                mode === 'manage' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            👤 Manage Students
+                                        </button>
+                                        <button 
+                                            onClick={() => setMode('teacher')}
+                                            className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                                                mode === 'teacher' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            ⚙️ Teacher Mode
+                                        </button>
+                                        <button 
+                                            onClick={handleLogout}
+                                            className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
+                                        >
+                                            Logout
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Render Current Mode */}
+                    {(isStudentOnly || mode === 'student') && renderStudentMode()}
+                    {!isStudentOnly && userRole === 'teacher' && mode === 'display' && renderDisplayMode()}
+                    {!isStudentOnly && userRole === 'teacher' && mode === 'manage' && renderManageStudentsMode()}
+                    {!isStudentOnly && userRole === 'teacher' && mode === 'teacher' && renderTeacherMode()}
                 </div>
-              )}
-              {!currentOut.boy && !currentOut.girl && (
-                <div className="text-sm text-gray-500">No one currently out</div>
-              )}
-            </div>
-            <div className="p-3 bg-gray-50 rounded">
-              <h3 className="font-semibold">Queue Status:</h3>
-              <div className="text-sm">
-                Boys in queue: {queues.boys.length}
-              </div>
-              <div className="text-sm">
-                Girls in queue: {queues.girls.length}
-              </div>
-            </div>
-          </div>
-        </div>
+            );
+        };
 
-        <div className="bg-white rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-bold mb-4 flex items-center">
-            <Settings className="mr-2" />
-            Settings
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Alert Threshold (minutes):</label>
-              <input
-                type="number"
-                min="1"
-                max="15"
-                value={alertThreshold}
-                onChange={(e) => setAlertThreshold(Number(e.target.value))}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Warning Threshold (minutes):</label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={warningThreshold}
-                onChange={(e) => setWarningThreshold(Number(e.target.value))}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Max Daily Uses:</label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={maxDailyUses}
-                onChange={(e) => setMaxDailyUses(Number(e.target.value))}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Sound Alerts:</span>
-              <button
-                onClick={() => setSoundEnabled(!soundEnabled)}
-                className={`p-2 rounded ${soundEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
-              >
-                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Dark Mode:</span>
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`px-3 py-1 rounded text-sm ${darkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'}`}
-              >
-                {darkMode ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Auto-Save:</span>
-              <button
-                onClick={() => setAutoSave(!autoSave)}
-                className={`px-3 py-1 rounded text-sm ${autoSave ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}`}
-              >
-                {autoSave ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            <button
-              onClick={clearAllData}
-              className="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition-colors"
-            >
-              Clear All Data
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-bold mb-4 flex items-center">
-            <TrendingUp className="mr-2" />
-            Quick Stats
-          </h2>
-          <div className="space-y-3">
-            {(() => {
-              const analytics = getAnalyticsData();
-              return (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Total Students:</span>
-                    <span className="font-bold">{analytics.totalStudents}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Active Today:</span>
-                    <span className="font-bold">{analytics.activeToday}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Today's Sessions:</span>
-                    <span className="font-bold">{analytics.todaySessions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Avg Session:</span>
-                    <span className="font-bold">{formatTime(analytics.avgSessionTime)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Peak Hour:</span>
-                    <span className="font-bold">{analytics.peakHour}</span>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg p-6 shadow-lg">
-        <h2 className="text-xl font-bold mb-4">Time Tracking Details</h2>
-        <div className="max-h-96 overflow-y-auto">
-          {Object.entries(timeTracking).length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No tracking data yet</div>
-          ) : (
-            Object.entries(timeTracking).map(([studentKey, data]) => {
-              const student = students[studentKey];
-              if (!student) return null;
-              
-              return (
-                <div key={studentKey} className="p-3 border-b hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium">{student.name} ({student.class})</div>
-                      <div className="text-sm text-gray-600 grid grid-cols-4 gap-4 mt-1">
-                        <div>Daily: {formatTime(data.daily)}</div>
-                        <div>Weekly: {formatTime(data.weekly)}</div>
-                        <div>Monthly: {formatTime(data.monthly)}</div>
-                        <div>Sessions: {data.totalSessions || 0}</div>
-                      </div>
-                    </div>
-                    <div className="text-right text-sm">
-                      <div className="text-gray-600">Avg: {formatTime(data.averageTime || 0)}</div>
-                      <div className="text-xs text-gray-500">
-                        Uses: {student.dailyUsed || 0}/{maxDailyUses}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
-      <audio ref={audioRef} />
-      {renderNotifications()}
-      {showAnalytics && renderAnalytics()}
-      
-      {/* Only show navigation bar if not in student-only mode */}
-      {!isStudentOnly && (
-        <div className="bg-white shadow-sm border-b p-4">
-          <div className="flex justify-center items-center space-x-4 flex-wrap">
-            {userRole === 'student' ? (
-              <>
-                <div className="px-6 py-2 rounded-lg font-medium bg-blue-600 text-white">
-                  <Users className="inline w-4 h-4 mr-2" />
-                  Student Mode
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="password"
-                    placeholder="Teacher password"
-                    value={teacherPassword}
-                    onChange={(e) => setTeacherPassword(e.target.value)}
-                    className="px-3 py-2 border rounded text-sm focus:ring-2 focus:ring-green-500"
-                    onKeyPress={(e) => e.key === 'Enter' && handleTeacherLogin()}
-                  />
-                  <button 
-                    onClick={handleTeacherLogin}
-                    className="px-4 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
-                  >
-                    Teacher Login
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <button 
-                  onClick={() => setMode('student')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    mode === 'student' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  <Users className="inline w-4 h-4 mr-2" />
-                  Student Mode
-                </button>
-                <button 
-                  onClick={() => setMode('display')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    mode === 'display' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  <Eye className="inline w-4 h-4 mr-2" />
-                  Display Mode
-                </button>
-                <button 
-                  onClick={() => setMode('manage')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    mode === 'manage' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  <User className="inline w-4 h-4 mr-2" />
-                  Manage Students
-                </button>
-                <button 
-                  onClick={() => setMode('teacher')}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    mode === 'teacher' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  <Settings className="inline w-4 h-4 mr-2" />
-                  Teacher Mode
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors"
-                >
-                  Logout
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Always show student mode if in student-only mode, otherwise show based on mode and role */}
-      {(isStudentOnly || mode === 'student') && renderStudentMode()}
-      {!isStudentOnly && userRole === 'teacher' && mode === 'display' && renderDisplayMode()}
-      {!isStudentOnly && userRole === 'teacher' && mode === 'manage' && renderManageStudentsMode()}
-      {!isStudentOnly && userRole === 'teacher' && mode === 'teacher' && renderTeacherMode()}
-    </div>
-  );
-};
-
-export default BathroomSystem;
+        // Render the app
+        ReactDOM.render(<BathroomSystem />, document.getElementById('root'));
+    </script>
+</body>
+</html>
